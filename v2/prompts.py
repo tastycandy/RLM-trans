@@ -37,15 +37,29 @@ SUB_AGENT_SYSTEM_TEMPLATE = """You are a professional translator specializing in
 
 CONTEXT:
 - Previous context summary: {context_summary}
-- Glossary (use these translations consistently):
-{glossary}
+- Style Guide: {style_guide_info}
+- HARD GLOSSARY (Strictly enforce these):
+{hard_glossary}
+- SOFT GLOSSARY (Use as reference):
+{soft_glossary}
 
 INSTRUCTIONS:
-1. Translate the given text naturally and fluently
-2. Follow the glossary strictly for consistent terminology
-3. Preserve the original tone, style, and formatting
-4. For names, use the glossary if available, otherwise transliterate appropriately
-5. Keep paragraph breaks and formatting markers
+1. Translate the given text naturally and fluently.
+2. **STRICTLY FOLLOW the Hard Glossary.** Do not deviate.
+3. For reference signs (e.g., '100', '10a'), ensure the accompanying term matches the glossary exactly (e.g., if '100' is 'Controller', always translate as '제어부' for '100').
+4. Identify NEW important terms (proper nouns, technical terms, repeated phrases) that are not in the glossary.
+5. Provide your output in the following JSON format ONLY:
+
+```json
+{{
+  "translated_text": "...your translation here...",
+  "term_candidates": {{
+    "Source Term 1": "Translated Term 1",
+    "Source Term 2": "Translated Term 2"
+  }},
+  "comments": "Any notes on ambiguity or decisions made"
+}}
+```
 
 Translate the following text:
 """
@@ -68,14 +82,38 @@ LANG_INSTRUCTIONS = {
 
 
 def get_sub_agent_prompt(source_lang: str, target_lang: str, 
-                          context_summary: str, glossary: dict) -> str:
+                          context_summary: str, glossary: dict = None, 
+                          context_package: dict = None) -> str:
     """Generate sub-agent system prompt with context"""
     
-    # Format glossary
-    if glossary:
-        glossary_str = "\n".join([f"  - {k} → {v}" for k, v in glossary.items()])
-    else:
-        glossary_str = "  (No terms defined yet)"
+    hard_glossary_str = "  (No mandatory terms)"
+    soft_glossary_str = "  (No reference terms)"
+    style_guide_str = "Follow standard translation rules."
+
+    if context_package:
+        # Use new context package
+        hg = context_package.get("hard_glossary", {})
+        if hg:
+            hard_glossary_str = "\n".join([f"  - {k} → {v}" for k, v in hg.items()])
+            
+        sg = context_package.get("soft_glossary", {})
+        # Merge confirmed terms into soft glossary if not in hard glossary
+        confirmed = context_package.get("confirmed_terms", {})
+        for k, v in confirmed.items():
+            if k not in hg and k not in sg:
+                sg[k] = v
+                
+        if sg:
+            soft_glossary_str = "\n".join([f"  - {k} → {v}" for k, v in sg.items()])
+            
+        style = context_package.get("style_guide", {})
+        style_guide_str = f"Tone: {style.get('tone', 'neutral')}"
+        if style.get('forbidden_words'):
+            style_guide_str += f", Forbidden words: {', '.join(style['forbidden_words'])}"
+            
+    elif glossary:
+        # Legacy support
+        hard_glossary_str = "\n".join([f"  - {k} → {v}" for k, v in glossary.items()])
     
     # Get language names
     lang_names = {
@@ -88,10 +126,12 @@ def get_sub_agent_prompt(source_lang: str, target_lang: str,
         source_lang=lang_names.get(source_lang, source_lang),
         target_lang=lang_names.get(target_lang, target_lang),
         context_summary=context_summary or "(Beginning of document)",
-        glossary=glossary_str
+        style_guide_info=style_guide_str,
+        hard_glossary=hard_glossary_str,
+        soft_glossary=soft_glossary_str
     )
     
-    # Add language-specific instructions
+    # Add language-specific instructions (Legacy, can be merged into style guide later)
     if target_lang in LANG_INSTRUCTIONS:
         lang_inst = LANG_INSTRUCTIONS[target_lang]
         prompt += f"\n\nLANGUAGE NOTES:\n- Style: {lang_inst['style']}\n- Names: {lang_inst['names']}"

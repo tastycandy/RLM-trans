@@ -22,15 +22,14 @@ def build_context_package(
         hard_glossary: Additional hard glossary entries (optional)
 
     Returns:
-        Dict with fixed format: rules, glossary, style, local_context, chunk
+        Dict with structured context
     """
-    hard_glossary = hard_glossary or state.get_hard_glossary()
+    # Base package from state (includes Hard/Soft terms, style guide)
+    package = state.get_context_package()
 
-    # Extract top N hard glossary entries
-    glossary_entries = list(hard_glossary.items())[:50]
-
-    # Build style guide section
-    style_guide = _build_style_guide(state.style_guide)
+    # Override/Extend hard glossary if provided explicitly
+    if hard_glossary:
+        package["hard_glossary"].update(hard_glossary)
 
     # Build local context (last 3-5 chunks)
     local_context = _build_local_context(state)
@@ -38,15 +37,14 @@ def build_context_package(
     # Build rules section from preset
     rules = _build_rules(state.preset_id)
 
-    package = {
+    # Merge into package
+    package.update({
         "rules": rules,
-        "glossary": glossary_entries,
-        "style": style_guide,
         "local_context": local_context,
         "chunk": current_chunk_text,
         "chunk_index": current_chunk_index,
         "document_type": state.document_type,
-    }
+    })
 
     return package
 

@@ -2,6 +2,8 @@
 RLM Sub Translator
 Handles translation of individual chunks with context package
 """
+import json
+import re
 from typing import Dict, Any, List, Optional
 import time
 
@@ -9,6 +11,8 @@ from config import LLMConfig
 from llm_client import LLMClient
 from rlm_state import PresetType
 from context_package import build_context_package, get_context_package_string
+# prompts.py에서 get_sub_agent_prompt 가져오기
+from prompts import get_sub_agent_prompt
 
 
 class SubTranslator:
@@ -61,10 +65,7 @@ class SubTranslator:
                 current_chunk_index=chunk_index
             )
 
-            # Convert to string for LLM
-            context_str = get_context_package_string(context_package)
-
-            # Build messages for LLM
+            # Build messages for LLM using prompts.py
             messages = self._build_messages(context_package)
 
             # Call LLM
@@ -73,21 +74,17 @@ class SubTranslator:
                 is_sub_call=True,
                 max_tokens=8192
             )
-
-            # Extract translation and term candidates
-            translation = response.content.strip()
-            term_candidates = self._extract_term_candidates(
-                context_package.get("chunk", ""),
-                translation
-            )
-
+            
+            # Parse response (JSON or Text fallback)
+            result = self._parse_llm_response(response.content, chunk_text)
+            
             # Calculate duration
             duration = time.time() - start_time
 
             return {
-                "translation": translation,
-                "term_candidates": term_candidates,
-                "warnings": [],
+                "translation": result["translation"],
+                "term_candidates": result["term_candidates"],
+                "warnings": result.get("warnings", []),
                 "success": True,
                 "duration": duration,
                 "token_usage": self.llm_client.cost_summary() if hasattr(self.llm_client, 'cost_summary') else {},
@@ -95,10 +92,12 @@ class SubTranslator:
 
         except Exception as e:
             duration = time.time() - start_time
+            import traceback
+            traceback.print_exc()
 
             return {
                 "translation": "",
-                "term_candidates": [],
+                "term_candidates": {},
                 "warnings": [f"Translation failed: {str(e)}"],
                 "success": False,
                 "duration": duration,
@@ -106,30 +105,69 @@ class SubTranslator:
             }
 
     def _build_messages(self, context_package: Dict[str, Any]) -> List[Dict[str, str]]:
-        """Build messages for LLM"""
+        """Build messages for LLM using prompts.py"""
         messages = []
+        
+        # Determine source language (if auto, use context or default)
+        src_lang = self.source_lang if self.source_lang != "auto" else "en" 
+        
+        # Get System Prompt from prompts.py
+        # context_package['history_summaries'] is list strings, prompts expects string
+        context_summary = "\n".join(context_package.get('history_summaries', []))
+        
+        system_prompt = get_sub_agent_prompt(
+            source_lang=src_lang,
+            target_lang=self.target_lang,
+            context_summary=context_summary,
+            context_package=context_package # Pass full package for hard/soft glossary
+        )
 
-        # System prompt based on preset type
-        system_prompt = self._get_system_prompt()
+        # Construct user message
+        chunk_text = context_package.get('chunk', '')
+        user_message = f"""Translate the following chunk:
 
-        # Build context section
-        context_str = get_context_package_string(context_package)
-
-        # Language names
-        lang_names = {"ko": "Korean", "ja": "Japanese", "en": "English", "auto": "detected language"}
-        target_name = lang_names.get(self.target_lang, self.target_lang)
-
-        # Construct user message with explicit target language
-        user_message = f"""
-{context_str}
-
-Translate the chunk above into {target_name}. Output ONLY the translation, nothing else.
+{chunk_text}
 """
 
         messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_message})
 
         return messages
+        
+    def _parse_llm_response(self, content: str, original_chunk: str) -> Dict[str, Any]:
+        """Parse LLM response handling JSON or fallback to text"""
+        content = content.strip()
+        
+        # Try to find JSON block
+        json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Try to find raw JSON (starts with { and end with })
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                # No JSON found, assume plain text translation
+                return {
+                    "translation": content,
+                    "term_candidates": {},
+                    "warnings": ["JSON parsing failed, used raw output"]
+                }
+                
+        try:
+            data = json.loads(json_str)
+            return {
+                "translation": data.get("translated_text", ""),
+                "term_candidates": data.get("term_candidates", {}),
+                "warnings": []
+            }
+        except json.JSONDecodeError:
+             return {
+                "translation": content, # Fallback to raw content if parse fails
+                "term_candidates": {},
+                "warnings": ["JSON decode error"]
+            }
 
     def _get_system_prompt(self) -> str:
         """Get system prompt based on preset type with target language"""

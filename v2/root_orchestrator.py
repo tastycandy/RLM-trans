@@ -165,8 +165,27 @@ class RootOrchestrator:
             }
 
         translation = translation_result["translation"]
+        term_candidates = translation_result.get("term_candidates", {})
         duration = translation_result.get("duration", 0)
         print(f"  [Step 3: TRANSLATE] Done ({len(translation)} chars, {duration:.2f}s)")
+
+        # Handle Term Candidates (Update Glossary)
+        if term_candidates:
+            print(f"  [Step 3: GLOSSARY] Found {len(term_candidates)} term candidates")
+            self.repl.state.propose_terms(term_candidates)
+            
+            # Simple policy: Auto-accept non-conflicting terms
+            accepted_count = 0
+            for src, tgt in term_candidates.items():
+                conflict = self.repl.state.check_term_conflict(src, tgt)
+                if not conflict:
+                    self.repl.state.update_glossary(src, tgt, force=False)
+                    accepted_count += 1
+                else:
+                    print(f"    [CONFLICT] '{src}': '{tgt}' vs existing '{conflict}'")
+            
+            if accepted_count > 0:
+                print(f"    [GLOSSARY] Auto-updated {accepted_count} new terms")
 
         # Update REPL state
         self.repl.state.add_chunk(chunk, translation)

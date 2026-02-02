@@ -441,7 +441,7 @@ class RLMControlPanel(QWidget):
         verify_layout.addWidget(self.sentence_verify)
         
         self.length_verify = QCheckBox("길이 검토 (50%)")
-        self.length_verify.setChecked(True)
+        self.length_verify.setChecked(False)
         self.length_verify.setToolTip("번역 길이가 원본의 50% 이상인지 확인합니다.")
         self.length_verify.setStyleSheet("font-size: 10px;")
         verify_layout.addWidget(self.length_verify)
@@ -1042,6 +1042,47 @@ class RLMTranslatorGUIv2(QMainWindow):
             self.tokens_display.setText(str(info.get('max_tokens', 4096)))
             self.chunk_display.setText(str(info.get('chunk_size', 2000)))
             self.status_bar.showMessage(f"프리셋: {name}")
+
+    def save_file(self):
+        """Save translation to file with auto-incrementing filename check"""
+        if not self.target_text.toPlainText():
+            return
+            
+        initial_name = "translation_result.txt"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "저장", initial_name, "Text Files (*.txt);;All Files (*)"
+        )
+        
+        if file_path:
+            path_obj = Path(file_path)
+            
+            # Auto-increment if file exists (Update request)
+            counter = 1
+            while path_obj.exists():
+                stem = path_obj.stem
+                import re
+                match = re.search(r'_(\d+)$', stem)
+                
+                if match:
+                   # This handles "test_1" -> "test_2"
+                   base_name = stem[:match.start()]
+                   current_num = int(match.group(1))
+                   path_obj = path_obj.with_name(f"{base_name}_{current_num + 1}{path_obj.suffix}")
+                else:
+                   path_obj = path_obj.with_name(f"{stem}_{counter}{path_obj.suffix}")
+                
+            try:
+                with open(path_obj, 'w', encoding='utf-8') as f:
+                    f.write(self.target_text.toPlainText())
+                QMessageBox.information(self, "저장됨", f"저장되었습니다: {path_obj.name}")
+            except Exception as e:
+                QMessageBox.warning(self, "오류", f"저장 실패: {e}")
+
+    def copy_result(self):
+        """Copy translation to clipboard"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.target_text.toPlainText())
+        self.status_bar.showMessage("클립보드에 복사됨", 2000)
     
     def edit_preset(self):
         """Open preset editor dialog"""
