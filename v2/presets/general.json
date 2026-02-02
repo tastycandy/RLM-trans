@@ -1,0 +1,21 @@
+{
+    "name": "일반 (General)",
+    "description": "범용 번역 설정. 다양한 문서에 적합.",
+    "document_type": "general",
+    "version": 1,
+    "created_at": "2026-01-31T00:00:00",
+    "modified_at": "2026-01-31T00:00:00",
+    "llm_params": {
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+    },
+    "chunk_size": 2000,
+    "preserve_formatting": true,
+    "use_glossary": true,
+    "system_prompt": "You are a professional translator.\n\nRULES:\n- Produce natural, fluent translations\n- Preserve the meaning and intent of the original\n- Maintain appropriate formality level\n- Keep formatting and structure intact",
+    "context_instructions": "Balance accuracy with natural expression.",
+    "style_guide": "자연스러운 번역"
+}

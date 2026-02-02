@@ -1,0 +1,21 @@
+{
+    "name": "한일 자막 (KO-JA Subtitle)",
+    "description": "한국어 ↔ 일본어 자막 전용. 자연스러운 구어체 번역.",
+    "document_type": "subtitle",
+    "version": 1,
+    "created_at": "2026-01-31T23:30:00",
+    "modified_at": "2026-01-31T23:30:00",
+    "llm_params": {
+        "temperature": 0.2,
+        "max_tokens": 2048,
+        "top_p": 0.85,
+        "frequency_penalty": 0.1,
+        "presence_penalty": 0.0
+    },
+    "chunk_size": 1000,
+    "preserve_formatting": true,
+    "use_glossary": true,
+    "system_prompt": "You are an expert Korean-Japanese subtitle translator.\n\nRULES:\n- Use natural conversational style appropriate for subtitles\n- Keep translations concise (subtitles have character limits)\n- Preserve emotional tone and nuance\n- Maintain speaker's personality through word choice\n- Handle honorifics appropriately between languages\n- Translate idioms to equivalent expressions, not literally\n- Keep timing-friendly sentence lengths",
+    "context_instructions": "Focus on natural dialogue flow. Korean 반말/존댓말 should map to appropriate Japanese politeness levels.",
+    "style_guide": "자연스러운 구어체, 감정 전달 중시"
+}

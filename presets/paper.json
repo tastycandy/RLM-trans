@@ -1,0 +1,21 @@
+{
+    "name": "논문 (Academic Paper)",
+    "description": "학술 논문 번역에 최적화. 정확하고 학술적인 표현 사용.",
+    "document_type": "paper",
+    "version": 1,
+    "created_at": "2026-01-31T00:00:00",
+    "modified_at": "2026-01-31T00:00:00",
+    "llm_params": {
+        "temperature": 0.2,
+        "max_tokens": 4096,
+        "top_p": 0.85,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+    },
+    "chunk_size": 2500,
+    "preserve_formatting": true,
+    "use_glossary": true,
+    "system_prompt": "You are an expert academic translator specializing in research papers.\n\nRULES:\n- Use precise academic terminology\n- Maintain formal, objective tone\n- Preserve technical terms (transliterate if no standard translation exists)\n- Keep citation formats intact\n- Translate figure/table captions accurately\n- Maintain logical flow and argumentation structure",
+    "context_instructions": "Preserve academic rigor and citation formats.",
+    "style_guide": "학술적 문체, 전문 용어 유지"
+}
