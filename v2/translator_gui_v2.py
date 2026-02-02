@@ -326,6 +326,87 @@ class GlossaryEditorDialog(QDialog):
         
         return glossary
 
+class GlossaryViewerDialog(QDialog):
+    """Dialog to view current RLM glossary state (Read-only view of learned terms)"""
+    
+    def __init__(self, hard_glossary: dict, soft_glossary: dict, confirmed_terms: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("RLM 용어집 뷰어 (자동 학습 결과)")
+        self.setMinimumSize(700, 600)
+        
+        self.hard_glossary = hard_glossary
+        self.soft_glossary = soft_glossary
+        self.confirmed_terms = confirmed_terms
+        
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        tabs = QTabWidget()
+        
+        # Helper to create tabs
+        def add_tab(data, title, desc):
+            widget = QWidget()
+            t_layout = QVBoxLayout(widget)
+            
+            t_layout.addWidget(QLabel(desc))
+            
+            from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+            table = QTableWidget()
+            table.setColumnCount(2)
+            table.setHorizontalHeaderLabels(["원문 (Source)", "번역 (Target)"])
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            
+            if data:
+                table.setRowCount(len(data))
+                for i, (k, v) in enumerate(sorted(data.items())):
+                    table.setItem(i, 0, QTableWidgetItem(str(k)))
+                    table.setItem(i, 1, QTableWidgetItem(str(v)))
+            else:
+                table.setRowCount(0)
+                t_layout.addWidget(QLabel("(데이터 없음)"))
+                
+            t_layout.addWidget(table)
+            tabs.addTab(widget, title)
+
+        add_tab(self.confirmed_terms, "확정 용어 (Confirmed)", "이번 세션에서 확정/학습된 용어 목록입니다.")
+        add_tab(self.hard_glossary, "필수 용어 (Hard)", "반드시 지켜야 하는 고정 용어집입니다.")
+        add_tab(self.soft_glossary, "참고 용어 (Soft)", "참고용으로 제공된 용어집입니다.")
+        
+        layout.addWidget(tabs)
+        
+        # Buttons
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+        
+        export_btn = QPushButton("JSON으로 내보내기")
+        export_btn.clicked.connect(self.export_glossary)
+        btn_box.addWidget(export_btn)
+        
+        close_btn = QPushButton("닫기")
+        close_btn.clicked.connect(self.accept)
+        btn_box.addWidget(close_btn)
+        
+        layout.addLayout(btn_box)
+        
+    def export_glossary(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "용어집 내보내기", "learned_glossary.json", "JSON Files (*.json)"
+        )
+        if file_path:
+            try:
+                data = {
+                    "confirmed": self.confirmed_terms,
+                    "hard": self.hard_glossary,
+                    "soft": self.soft_glossary
+                }
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                QMessageBox.information(self, "성공", "용어집이 저장되었습니다.")
+            except Exception as e:
+                QMessageBox.warning(self, "오류", f"저장 실패: {e}")
+
 
 class RLMControlPanel(QWidget):
     """Control panel for RLM mode settings with tabbed interface"""
@@ -885,6 +966,10 @@ class RLMTranslatorGUIv2(QMainWindow):
         self.save_btn.clicked.connect(self.save_file)
         self.save_btn.setEnabled(False)
         target_header.addWidget(self.save_btn)
+
+        self.glossary_view_btn = QPushButton("용어집 보기")
+        self.glossary_view_btn.clicked.connect(self.view_glossary)
+        target_header.addWidget(self.glossary_view_btn)
         self.copy_btn = QPushButton("복사")
         self.copy_btn.clicked.connect(self.copy_result)
         self.copy_btn.setEnabled(False)
@@ -1083,6 +1168,27 @@ class RLMTranslatorGUIv2(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setText(self.target_text.toPlainText())
         self.status_bar.showMessage("클립보드에 복사됨", 2000)
+
+    def view_glossary(self):
+        """Open glossary viewer dialog"""
+        if not self.translator:
+             QMessageBox.information(self, "알림", "번역기가 초기화되지 않았습니다.")
+             return
+
+        # Try to get state from RLM
+        hard = {}
+        soft = {}
+        confirmed = {}
+        
+        if hasattr(self.translator, 'root_agent') and hasattr(self.translator.root_agent, 'repl'):
+            if self.translator.root_agent.repl and self.translator.root_agent.repl.state:
+                state = self.translator.root_agent.repl.state
+                hard = state.hard_glossary
+                soft = state.soft_glossary
+                confirmed = state.confirmed_terms
+            
+        dialog = GlossaryViewerDialog(hard, soft, confirmed, self)
+        dialog.exec()
     
     def edit_preset(self):
         """Open preset editor dialog"""
